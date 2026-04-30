@@ -3161,14 +3161,10 @@ function App(){
                 saving={saving} saveMsg={saveMsg} t={t} lang={lang}/>}
             </>
           )}
+          {tab==="dashboard"&&canEdit&&<Dashboard workflows={workflows} t={t}/>}
         </div>
       </div>
-      {tab==="dashboard"&&canEdit&&(
-        <div style={{position:"fixed",top:48,left:sidebarCollapsed?40:230,right:0,bottom:0,
-          overflowY:"auto",background:S.g50,display:"flex",flexDirection:"column"}}>
-          <Dashboard workflows={workflows} t={t}/>
-        </div>
-      )}
+
 
       {toast&&<Toast msg={toast.msg} type={toast.type}/>}
       {showNotifPanel&&<NotificationPanel lateItems={lateItems} onClose={()=>setShowNotifPanel(false)} t={t}/>}
