@@ -2107,7 +2107,7 @@ function Dashboard({workflows, t}) {
     : workflows.filter(w=>w.client===clientFilter);
 
   // ── Computed KPIs ────────────────────────────────────
-  const allSteps = filteredWorkflows.flatMap(wf => wf.steps.map(s => ({...s, wf})));
+  const allSteps = filteredWorkflows.flatMap(wf => (wf.steps||[]).filter(Boolean).map(s => ({...s, wf})));
   const totalExpats    = filteredWorkflows.length;
   const totalSteps     = allSteps.length;
   const completedSteps = allSteps.filter(s => s.status === "completed").length;
@@ -2163,7 +2163,7 @@ function Dashboard({workflows, t}) {
        "ETAPA","RESPONSAVEL","AREA","STATUS","DATA_INICIO_ETAPA","PRAZO_ETAPA",
        "DIAS_ATRASO","ATRASADO","CONCLUIDO"],
       ...filteredWorkflows.flatMap(wf =>
-        wf.steps.map(s => {
+        (wf.steps||[]).filter(Boolean).map(s => {
           const ow = getAllOwners()[s.owner_type]||DEFAULT_OWNERS.sirva_imigracao;
           const deadline = s.end_date?new Date(s.end_date+"T00:00:00"):null;
           const isLate = s.status!=="completed"&&deadline&&deadline<today;
@@ -2338,8 +2338,6 @@ function Dashboard({workflows, t}) {
     </div>
   );
 
-  // Safety: if any render error, show message
-  try {
   return (
     <div style={{padding:"20px",flex:1,overflow:"auto"}}>
       {/* Top bar */}
@@ -2689,15 +2687,7 @@ function Dashboard({workflows, t}) {
       )}
     </div>
   );
-  } catch(err) {
-    return (
-      <div style={{padding:40,textAlign:"center",fontFamily:"Manrope",color:S.text}}>
-        <div style={{fontSize:32,marginBottom:12}}>⚠️</div>
-        <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Erro ao carregar dashboard</div>
-        <div style={{fontSize:12,color:S.g400}}>{err.message}</div>
-      </div>
-    );
-  }
+
 }
 /* ═══════════════════════════════════════════════════════
    SIDEBAR
