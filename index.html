@@ -541,6 +541,78 @@ function SetupScreen({onDone,lang}){
 /* ═══════════════════════════════════════════════════════
    LOGIN SCREEN
 ═══════════════════════════════════════════════════════ */
+
+function RequestAccessBtn(){
+  const[open,setOpen]=useState(false);
+  const[name,setName]=useState("");
+  const[reqEmail,setReqEmail]=useState("");
+  const[company,setCompany]=useState("");
+  const IS2={fontFamily:"Manrope",fontSize:12,color:"#fff",
+    background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",
+    borderRadius:8,padding:"9px 12px",outline:"none",width:"100%",boxSizing:"border-box"};
+  const LS2={fontFamily:"Manrope",fontSize:9,color:"rgba(255,255,255,0.4)",fontWeight:700,
+    textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4,display:"block"};
+
+  const send=()=>{
+    if(!name.trim()||!reqEmail.trim()){alert("Preencha nome e e-mail.");return;}
+    const subject=encodeURIComponent("Solicitação de Acesso — Relocation Timelines");
+    const body=encodeURIComponent(
+      "Olá Amanda,\n\n"+
+      "Gostaria de solicitar acesso ao sistema Relocation Timelines.\n\n"+
+      "Nome: "+name+"\n"+
+      "E-mail: "+reqEmail+"\n"+
+      (company?"Empresa/Cliente: "+company+"\n":"")+
+      "\nAguardo o retorno.\n\nAtenciosamente,\n"+name
+    );
+    window.location.href=`mailto:amanda.brandao@sirva.com?subject=${subject}&body=${body}`;
+    setOpen(false);
+    setName("");setReqEmail("");setCompany("");
+  };
+
+  return(
+    <>
+      <button onClick={()=>setOpen(!open)}
+        style={{marginTop:18,width:"100%",padding:"12px 14px",
+          background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",
+          borderRadius:10,fontFamily:"Manrope",fontSize:11,cursor:"pointer",
+          color:"rgba(255,255,255,0.4)",lineHeight:1.7,textAlign:"center",
+          transition:"all 0.15s"}}>
+        {open?"▲ Fechar":"Não tem acesso? Solicite ao administrador Sirva →"}
+      </button>
+      {open&&(
+        <div style={{marginTop:8,background:"rgba(255,255,255,0.05)",
+          border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"16px"}}>
+          <div style={{fontFamily:"Manrope",fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.6)",marginBottom:12}}>
+            Preencha para solicitar acesso:
+          </div>
+          <div style={{marginBottom:10}}>
+            <label style={LS2}>Seu nome *</label>
+            <input style={IS2} value={name} onChange={e=>setName(e.target.value)} placeholder="Nome completo"/>
+          </div>
+          <div style={{marginBottom:10}}>
+            <label style={LS2}>Seu e-mail *</label>
+            <input style={IS2} type="email" value={reqEmail} onChange={e=>setReqEmail(e.target.value)} placeholder="seu@email.com"/>
+          </div>
+          <div style={{marginBottom:14}}>
+            <label style={LS2}>Empresa / Cliente (opcional)</label>
+            <input style={IS2} value={company} onChange={e=>setCompany(e.target.value)} placeholder="Nome da empresa"/>
+          </div>
+          <button onClick={send}
+            style={{width:"100%",padding:"10px",background:"linear-gradient(135deg,#A64DD6,#8B3DB8)",
+              color:"#fff",border:"none",borderRadius:8,fontFamily:"Manrope",
+              fontSize:12,fontWeight:800,cursor:"pointer"}}>
+            ✉️ Enviar Solicitação
+          </button>
+          <div style={{fontFamily:"Manrope",fontSize:10,color:"rgba(255,255,255,0.25)",
+            marginTop:8,textAlign:"center"}}>
+            Abrirá seu cliente de e-mail com a solicitação preenchida
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function LoginScreen({onLogin,lang,setLang}){
   const t=T[lang];
   const[email,setEmail]=useState("");
@@ -585,6 +657,12 @@ function LoginScreen({onLogin,lang,setLang}){
         setErr("E-mail ou senha incorretos.");
       } else if(e.code==="auth/too-many-requests"){
         setErr("Muitas tentativas. Aguarde alguns minutos.");
+      } else if(e.code==="auth/api-key-not-valid"||e.message.includes("api-key-not-valid")){
+        setErr("Credenciais Firebase inválidas. Reconfigure clicando em 🔧 abaixo.");
+        localStorage.removeItem("fb_api_key");
+        localStorage.removeItem("fb_auth_domain");
+        localStorage.removeItem("fb_project_id");
+        setTimeout(()=>window.location.reload(),2000);
       } else {
         setErr(e.message);
       }
@@ -670,11 +748,7 @@ function LoginScreen({onLogin,lang,setLang}){
           {loading?<><Spinner color="#fff"/>Aguarde...</>:"Entrar →"}
         </button>
 
-        <div style={{marginTop:18,padding:"12px 14px",background:"rgba(255,255,255,0.04)",
-          borderRadius:10,fontFamily:"Manrope",fontSize:11,
-          color:"rgba(255,255,255,0.3)",lineHeight:1.7,textAlign:"center"}}>
-          Não tem acesso? Solicite ao administrador Sirva.
-        </div>
+        <RequestAccessBtn/>
       </div>
     </div>
   );
@@ -1783,17 +1857,33 @@ function EditorView({wf,onUpdate,onSave,saving,saveMsg,t,lang}){
   const[showTranslatePicker,setShowTranslatePicker]=useState(false);
 
   const[localWf,setLocalWf]=useState(wf);
+  const localWfRef=useRef(wf);
   const wfIdRef=useRef(wf.id);
+
+  // Only reset when switching to a different workflow
   useEffect(()=>{
-    // Only re-sync when switching to a different workflow, not on every prop change
     if(wf.id!==wfIdRef.current){
       wfIdRef.current=wf.id;
+      localWfRef.current=wf;
       setLocalWf(wf);
     }
   },[wf.id]);
-  const siLocal=(f,v)=>setLocalWf(s=>({...s,[f]:v}));
-  const siFlush=(f,v)=>{const updated={...localWf,[f]:v};setLocalWf(updated);onUpdate(updated);};
-  const flushWf=()=>onUpdate(localWf);
+
+  // Update local state only — no parent re-render on each keystroke
+  const siLocal=(f,v)=>{
+    const updated={...localWfRef.current,[f]:v};
+    localWfRef.current=updated;
+    setLocalWf(updated);
+  };
+  // Immediate flush (for selects, dates, buttons)
+  const siFlush=(f,v)=>{
+    const updated={...localWfRef.current,[f]:v};
+    localWfRef.current=updated;
+    setLocalWf(updated);
+    onUpdate(updated);
+  };
+  // Flush on blur (for text inputs — push to parent only when leaving field)
+  const flushWf=()=>onUpdate(localWfRef.current);
 
   const IS={fontFamily:"Manrope",fontSize:13,color:S.text,background:S.g50,border:`1.5px solid ${S.g200}`,borderRadius:8,padding:"8px 11px",outline:"none",width:"100%",boxSizing:"border-box"};
   const LS={fontFamily:"Manrope",fontSize:9,color:S.g400,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4,display:"block"};
@@ -1896,7 +1986,7 @@ function EditorView({wf,onUpdate,onSave,saving,saveMsg,t,lang}){
                     {(f.size/1024).toFixed(0)}KB
                   </span>
                   <button onClick={()=>{
-                    const updated=(localWf.attachments||[]).filter((_,j)=>j!==i);
+                    const updated=(localWfRef.current.attachments||[]).filter((_,j)=>j!==i);
                     siFlush("attachments",updated);
                   }} style={{border:"none",background:"#fef2f2",borderRadius:6,
                     padding:"3px 7px",cursor:"pointer",color:"#ef4444",
@@ -1923,19 +2013,26 @@ function EditorView({wf,onUpdate,onSave,saving,saveMsg,t,lang}){
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                 onChange={e=>{
                   const files=Array.from(e.target.files);
-                  const current=localWf.attachments||[];
+                  const current=[...(localWfRef.current.attachments||[])];
                   const remaining=10-current.length;
+                  if(remaining<=0){alert("Limite de 10 arquivos atingido.");return;}
                   const toAdd=files.slice(0,remaining);
-                  let added=0;
+                  let processed=0;
                   const newFiles=[...current];
                   toAdd.forEach(file=>{
-                    if(file.size>5*1024*1024){alert(`${file.name}: máx 5MB por arquivo.`);return;}
+                    if(file.size>5*1024*1024){
+                      alert(`${file.name}: máx 5MB por arquivo.`);
+                      processed++;
+                      if(processed===toAdd.length) siFlush("attachments",newFiles);
+                      return;
+                    }
                     const reader=new FileReader();
                     reader.onload=ev=>{
-                      newFiles.push({name:file.name,size:file.size,data:ev.target.result});
-                      added++;
-                      if(added===toAdd.length) siFlush("attachments",newFiles);
+                      newFiles.push({name:file.name,size:Math.round(file.size/1024),data:ev.target.result});
+                      processed++;
+                      if(processed===toAdd.length) siFlush("attachments",newFiles);
                     };
+                    reader.onerror=()=>{ processed++; if(processed===toAdd.length) siFlush("attachments",newFiles); };
                     reader.readAsDataURL(file);
                   });
                   e.target.value="";
