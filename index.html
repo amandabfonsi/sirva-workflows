@@ -658,13 +658,9 @@ function LoginScreen({onLogin,lang,setLang}){
       } else if(e.code==="auth/too-many-requests"){
         setErr("Muitas tentativas. Aguarde alguns minutos.");
       } else if(e.code==="auth/api-key-not-valid"||e.message.includes("api-key-not-valid")){
-        setErr("Credenciais Firebase inválidas. Reconfigure clicando em 🔧 abaixo.");
-        localStorage.removeItem("fb_api_key");
-        localStorage.removeItem("fb_auth_domain");
-        localStorage.removeItem("fb_project_id");
-        setTimeout(()=>window.location.reload(),2000);
+        setErr("API Key inválida ("+e.code+"). Acesse console.firebase.google.com → Project Settings → verifique se a API Key está correta e sem restrições de domínio no Google Cloud Console.");
       } else {
-        setErr(e.message);
+        setErr("Erro: "+(e.code||e.message));
       }
     }
     setLoading(false);
@@ -2145,7 +2141,7 @@ function Dashboard({workflows, t}) {
       byMonth[m] = (byMonth[m]||0)+1;
     }
   });
-  const months = Object.keys(byMonth).sort().slice(-6);
+  const months = Object.keys(byMonth||{}).sort().slice(-6);
 
   // By owner (responsible)
   const lateByOwner = {};
@@ -2267,11 +2263,12 @@ function Dashboard({workflows, t}) {
   };
 
   const DonutChart = ({slices, size=120}) => {
-    const total = slices.reduce((s,x)=>s+x.value,0)||1;
+    const total = slices.reduce((s,x)=>s+(x.value||0),0)||1;
     let angle = -90;
     const cx=size/2, cy=size/2, r=size*0.38, ir=size*0.22;
-    const paths = slices.map(s => {
+    const paths = slices.filter(s=>s.value>0).map(s => {
       const pct = s.value/total;
+      if(pct<=0) return null;
       const a1 = angle * Math.PI/180;
       angle += pct*360;
       const a2 = angle * Math.PI/180;
@@ -2282,7 +2279,7 @@ function Dashboard({workflows, t}) {
       const large = pct>0.5?1:0;
       return {d:`M ${xi1} ${yi1} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${xi2} ${yi2} A ${ir} ${ir} 0 ${large} 0 ${xi1} ${yi1} Z`,
         fill:s.color, label:s.label, value:s.value, pct:Math.round(pct*100)};
-    });
+    }).filter(Boolean);
     return (
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         {total===0
@@ -2341,6 +2338,8 @@ function Dashboard({workflows, t}) {
     </div>
   );
 
+  // Safety: if any render error, show message
+  try {
   return (
     <div style={{padding:"20px",flex:1,overflow:"auto"}}>
       {/* Top bar */}
@@ -2681,7 +2680,7 @@ function Dashboard({workflows, t}) {
         </Section>
       )}
 
-      {workflows.length===0&&(
+      {filteredWorkflows.length===0&&(
         <div style={{textAlign:"center",padding:"60px 20px",color:S.g400,fontFamily:"Manrope"}}>
           <div style={{fontSize:48,marginBottom:12}}>📊</div>
           <div style={{fontSize:14,fontWeight:700}}>Nenhum dado ainda</div>
@@ -2690,6 +2689,15 @@ function Dashboard({workflows, t}) {
       )}
     </div>
   );
+  } catch(err) {
+    return (
+      <div style={{padding:40,textAlign:"center",fontFamily:"Manrope",color:S.text}}>
+        <div style={{fontSize:32,marginBottom:12}}>⚠️</div>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Erro ao carregar dashboard</div>
+        <div style={{fontSize:12,color:S.g400}}>{err.message}</div>
+      </div>
+    );
+  }
 }
 /* ═══════════════════════════════════════════════════════
    SIDEBAR
@@ -2921,31 +2929,36 @@ function App(){
 
   // Init: check for saved Firebase config
   useEffect(()=>{
-    const saved=localStorage.getItem("sirva_fb_cfg");
-    if(saved){
-      try{
-        const cfg=JSON.parse(saved);
-        initFirebase(cfg).then(()=>{
-          setFbCfg(cfg);
-          // Listen to auth state
-          fbAuth.onAuthStateChanged(async fbUser=>{
-            if(fbUser){
-              const users=await loadUsers();
-              const found=(users||[]).find(u=>u.email===fbUser.email);
-              if(found&&found.active!=="false"){
-                setUser(fbUser);setUserRecord(found);setPhase("app");
-              } else {
-                setPhase("login");
-              }
-            } else {
-              setPhase("login");
-            }
-          });
-        }).catch(()=>setPhase("setup"));
-      }catch{setPhase("setup");}
-    } else {
-      setPhase("setup");
+    // Use saved config or fall back to hardcoded defaults
+    let cfg;
+    try{ cfg=JSON.parse(localStorage.getItem("sirva_fb_cfg")||"null"); }catch{cfg=null;}
+    if(!cfg){
+      cfg={
+        apiKey:"AIzaSyCXG6ZR5OyZD0O-U8qoeBzG3KI2zWyNDZU",
+        authDomain:"sirva-workflows.firebaseapp.com",
+        projectId:"sirva-workflows"
+      };
+      localStorage.setItem("sirva_fb_cfg",JSON.stringify(cfg));
     }
+    setFbCfg(cfg);
+    initFirebase(cfg).then(()=>{
+      fbAuth.onAuthStateChanged(async fbUser=>{
+        if(fbUser){
+          const users=await loadUsers();
+          const found=(users||[]).find(u=>u.email===fbUser.email);
+          if(found&&found.active!=="false"){
+            setUser(fbUser);setUserRecord(found);setPhase("app");
+          } else {
+            setPhase("login");
+          }
+        } else {
+          setPhase("login");
+        }
+      });
+    }).catch(e=>{
+      console.error("Firebase init failed:",e);
+      setPhase("login");
+    });
   },[]);
 
   // Load data when entering app
